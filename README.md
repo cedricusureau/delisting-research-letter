@@ -44,36 +44,60 @@ takes under a minute on a modern laptop.
 
 ## Data description
 
-All delays are expressed in **days**.
-Patient identifiers are sequential integers (1..N) and **distinct
-between the two figures**: an identifier in `figure1_patients.csv`
-is not the same individual as the identifier in
-`figure2_patients.csv`.
+All times are expressed in **days**.
 
 ### `data/figure1_patients.csv` — one row per patient
 
 | column | description |
 |---|---|
-| `patient_id` | anonymised sequential integer |
+| `patient_id` | sequential integer |
 | `cpra_baseline` | cPRA before delisting (%) |
 | `cpra_post` | cPRA after delisting (%) |
 | `cpra_fc` | cPRA fold-change: `(100 − cpra_post) / (100 − cpra_baseline)` |
 | `time_to_transplant_days` | days from delisting to transplant or end of follow-up |
 | `transplant_event` | 1 = transplanted, 0 = censored |
 
-### `data/figure1_gridsearch_standard.csv` and `figure1_gridsearch_bootstrap.csv`
+### `data/figure1_gridsearch_standard.csv`
 
-Precomputed grid-search outputs used by Panel A of Figure 1. Each row
-is one `(cpra_baseline, cpra_fc)` threshold combination. These files
-contain only aggregated statistics (p-value, effect size, significance
-rate, stability score) — no patient-level information. They can be
-rebuilt from scratch with `run_gridsearch.py` (see below).
+Precomputed standard grid-search output used by Panel A of Figure 1.
+Each row is one `(cpra_min, cpra_fc)` threshold combination applied
+to the full cohort.
+
+| column | description |
+|---|---|
+| `cpra_min` | lower cPRA threshold (%) used to select the population |
+| `cpra_fc` | cPRA-FC threshold used to split the population into two groups |
+| `p_value` | log-rank p-value comparing the two groups |
+| `test_statistic` | log-rank test statistic |
+| `rate_low` / `rate_high` | 2-year transplant rate (%) in each group |
+| `effect_size` | absolute difference between `rate_high` and `rate_low` (percentage points) |
+| `n_total`, `n_low`, `n_high` | population sizes (full, low-FC group, high-FC group) |
+| `is_significant` | `True` if `p_value ≤ 0.05` |
+| `has_effect` | `True` if `effect_size ≥ 5` percentage points |
+
+### `data/figure1_gridsearch_bootstrap.csv`
+
+Bootstrap grid-search output used by Panel A. For each
+`(cpra_min, cpra_fc)` combination, the log-rank test is repeated on
+100 bootstrap samples (85 % of the cohort, sampled with replacement)
+and the stability of the result is summarised across samples.
+
+| column | description |
+|---|---|
+| `cpra_min`, `cpra_fc` | threshold combination |
+| `n_valid_tests` | number of bootstrap iterations (out of 100) that passed minimum population/balance criteria |
+| `p_mean`, `p_std`, `p_median`, `p_min`, `p_max` | distribution of p-values across bootstrap samples |
+| `significant_rate` | fraction of samples with `p_value ≤ 0.05` — this is the value plotted as the "Bootstrap >70 %" frontier |
+| `effect_mean`, `effect_std` | distribution of the 2-year rate difference across samples |
+| `population_mean`, `population_std` | distribution of the population size across samples |
+| `stability_score` | `1 / (1 + p_std)` — informal measure of how consistent the p-value is across bootstraps |
+| `meets_target` | `True` if `significant_rate ≥ 0.66` |
 
 ### `data/figure2_patients.csv` — one row per patient
 
 | column | description |
 |---|---|
-| `patient_id` | anonymised sequential integer |
+| `patient_id` | sequential integer |
 | `dsa_category` | 1 (no DSA >2000 pre-transplant), 2 (historical only), 3 (persistent at D0) |
 | `event_composite` | 1 = graft loss or death, 0 = censored |
 | `time_composite_days` | days to composite event or end of follow-up |
@@ -89,9 +113,7 @@ rebuilt from scratch with `run_gridsearch.py` (see below).
 | `mfi_max` | maximum MFI across all donor-specific antibodies in the serum |
 
 Sera are restricted to the window `[-365, +1095]` days around the
-transplant (the range effectively used by Panel A). Earlier sera were
-dropped to minimise the risk of re-identification via extreme
-follow-up values.
+transplant — the range effectively used by Panel A.
 
 ## Rebuilding the grid-search from scratch (optional)
 
